@@ -1490,6 +1490,14 @@
               </svg>
               <span>PRINT RESULT</span>
             </button>
+            <button type="button" id="savePdfBtn" class="result-btn result-btn-secondary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M12 3v12"></path>
+                <path d="m7 10 5 5 5-5"></path>
+                <path d="M5 21h14"></path>
+              </svg>
+              <span>SAVE AS PDF</span>
+            </button>
             <button type="button" id="searchAnotherBtn" class="result-btn result-btn-secondary">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <circle cx="11" cy="11" r="8"></circle>
@@ -1512,6 +1520,8 @@
 
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
   <script>
     /* ==========================================================================
        FU-GLIDE CLIENT-SIDE DECRYPTION & RESULT PORTAL ENGINE
@@ -1587,6 +1597,7 @@
     const alertNotFound = document.getElementById('alertNotFound');
     const resultDisplayWrapper = document.getElementById('resultDisplayWrapper');
     const printBtn = document.getElementById('printResultBtn');
+    const savePdfBtn = document.getElementById('savePdfBtn');
     const searchAnotherBtn = document.getElementById('searchAnotherBtn');
 
     // Auto-uppercase input
@@ -1877,6 +1888,147 @@
     // Print Action
     printBtn.addEventListener('click', () => {
       window.print();
+    });
+
+    savePdfBtn.addEventListener('click', () => {
+      const JsPdf = window.jspdf && window.jspdf.jsPDF;
+      if (!JsPdf) {
+        alert('PDF download is unavailable. Check your internet connection and try again.');
+        return;
+      }
+
+      try {
+        const pdf = new JsPdf({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const margin = 14;
+        const studentName = document.getElementById('sheetStudentName').textContent.trim();
+        const registerId = document.getElementById('sheetUniqueId').textContent.trim();
+        const info = [
+          ['Student Name', studentName],
+          ['Hall Ticket Number', registerId],
+          ['College Register No.', document.getElementById('sheetRegNo').textContent.trim()],
+          ['Course Program', document.getElementById('sheetCourse').textContent.trim()],
+          ['Department', document.getElementById('sheetDepartment').textContent.trim()],
+          ['Issue Date', document.getElementById('sheetIssueDate').textContent.trim()]
+        ];
+
+        pdf.setTextColor(20, 34, 58);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(14);
+        pdf.text('FU-GLIDE INNOVATION INTELLIGENCE NETWORK', pageWidth / 2, 17, { align: 'center' });
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        pdf.text('Center for Advanced Technology & Academic Examinations', pageWidth / 2, 23, { align: 'center' });
+        pdf.setDrawColor(176, 108, 255);
+        pdf.setLineWidth(0.6);
+        pdf.line(margin, 28, pageWidth - margin, 28);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(12);
+        pdf.text('STATEMENT OF ACADEMIC PERFORMANCE', pageWidth / 2, 37, { align: 'center' });
+
+        info.forEach(([label, value], index) => {
+          const column = index % 2;
+          const row = Math.floor(index / 2);
+          const x = margin + column * ((pageWidth - margin * 2) / 2);
+          const y = 49 + row * 15;
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(7);
+          pdf.setTextColor(95, 106, 122);
+          pdf.text(label.toUpperCase(), x, y);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(9);
+          pdf.setTextColor(20, 34, 58);
+          pdf.text(pdf.splitTextToSize(value || '—', (pageWidth - margin * 2) / 2 - 8), x, y + 5);
+        });
+
+        const subjectRows = Array.from(document.querySelectorAll('#sheetSubjectRows tr'), (row, index) => {
+          const cells = Array.from(row.cells, cell => cell.textContent.trim());
+          return [String(index + 1), cells[1] || '', cells[2] || '', cells[3] || ''];
+        });
+
+        pdf.autoTable({
+          startY: 97,
+          margin: { left: margin, right: margin },
+          head: [['#', 'Subject Name', 'Max Marks', 'Marks Obtained']],
+          body: subjectRows,
+          theme: 'grid',
+          styles: { font: 'helvetica', fontSize: 9, cellPadding: 3, textColor: [35, 45, 60], lineColor: [210, 216, 225] },
+          headStyles: { fillColor: [20, 34, 58], textColor: [255, 255, 255], fontStyle: 'bold' },
+          columnStyles: {
+            0: { cellWidth: 12, halign: 'center' },
+            1: { cellWidth: 'auto' },
+            2: { cellWidth: 30, halign: 'right' },
+            3: { cellWidth: 38, halign: 'right' }
+          }
+        });
+
+        const footerTop = pdf.internal.pageSize.getHeight() - 48;
+        let summaryY = pdf.lastAutoTable.finalY + 10;
+        if (summaryY + 22 > footerTop - 8) {
+          pdf.addPage();
+          summaryY = 20;
+        }
+
+        const summaries = [
+          ['TOTAL MAXIMUM', document.getElementById('sheetTotalMax').textContent.trim()],
+          ['TOTAL OBTAINED', document.getElementById('sheetTotalObtained').textContent.trim()],
+          ['PERCENTAGE', document.getElementById('sheetPercentage').textContent.trim()],
+          ['RANK / DESIGNATION', document.getElementById('sheetRank').textContent.trim()]
+        ];
+        const summaryWidth = (pageWidth - margin * 2) / summaries.length;
+        summaries.forEach(([label, value], index) => {
+          const x = margin + index * summaryWidth;
+          pdf.setDrawColor(210, 216, 225);
+          pdf.setFillColor(index === 2 ? 255 : 247, index === 2 ? 247 : 249, index === 2 ? 232 : 252);
+          pdf.rect(x, summaryY, summaryWidth, 22, 'FD');
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(6.5);
+          pdf.setTextColor(95, 106, 122);
+          pdf.text(label, x + 3, summaryY + 6);
+          pdf.setFontSize(8);
+          pdf.setTextColor(20, 34, 58);
+          pdf.text(pdf.splitTextToSize(value || '—', summaryWidth - 6), x + 3, summaryY + 13);
+        });
+
+        pdf.setDrawColor(148, 163, 184);
+        pdf.setLineWidth(0.4);
+        pdf.line(margin, footerTop, pageWidth - margin, footerTop);
+
+        const disclaimer = 'Note: This is a digitally verified statement of marks issued by the FU-GLIDE Examination Authority. The integrity of this document is cryptographically validated.';
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7);
+        pdf.setTextColor(95, 106, 122);
+        pdf.text(pdf.splitTextToSize(disclaimer, 105), margin, footerTop + 8);
+
+        const sealCenter = pageWidth - margin - 28;
+        const signatureImage = document.querySelector('.result-signature-img');
+        if (signatureImage && signatureImage.complete && signatureImage.naturalWidth > 0) {
+          const canvas = document.createElement('canvas');
+          canvas.width = signatureImage.naturalWidth;
+          canvas.height = signatureImage.naturalHeight;
+          canvas.getContext('2d').drawImage(signatureImage, 0, 0);
+          pdf.addImage(canvas.toDataURL('image/png'), 'PNG', sealCenter - 19, footerTop + 2, 38, 13);
+        }
+
+        pdf.setDrawColor(20, 34, 58);
+        pdf.setLineWidth(0.4);
+        pdf.line(sealCenter - 23, footerTop + 18, sealCenter + 23, footerTop + 18);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(20, 34, 58);
+        pdf.text('Mr.S.Vimal Raj BSc-CS-AI', sealCenter, footerTop + 23, { align: 'center' });
+        pdf.text('Controller of Examinations', sealCenter, footerTop + 28, { align: 'center' });
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(6.5);
+        pdf.setTextColor(95, 106, 122);
+        pdf.text('FU-GLIDE Academic Board', sealCenter, footerTop + 33, { align: 'center' });
+
+        const safeId = (registerId !== '—' ? registerId : studentName).replace(/[^a-z0-9_-]/gi, '_');
+        pdf.save(`FU-GLIDE_Marksheet_${safeId || 'result'}.pdf`);
+      } catch (error) {
+        console.error('Could not generate marksheet PDF:', error);
+        alert('The marksheet PDF could not be generated. Please try again.');
+      }
     });
 
     // Search Another Action
