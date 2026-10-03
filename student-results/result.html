@@ -1643,7 +1643,9 @@
         .replace(/'/g, '&#039;');
     }
 
-    // Derive AES-GCM Key using Web Crypto PBKDF2 (SHA-256, 200,000 iterations) from student ID/RegNo
+    const PBKDF2_ITERATIONS = 100000;
+
+    // Derive AES-GCM Key using Web Crypto PBKDF2 (SHA-256, 100,000 iterations) from student ID/RegNo
     async function deriveDecryptionKey(normalizedId, saltBytes) {
       const passphrase = normalizedId;
       const enc = new TextEncoder();
@@ -1659,7 +1661,7 @@
         {
           name: 'PBKDF2',
           salt: saltBytes,
-          iterations: 200000,
+          iterations: PBKDF2_ITERATIONS,
           hash: 'SHA-256'
         },
         keyMaterial,
@@ -1911,6 +1913,16 @@
           ['Department', document.getElementById('sheetDepartment').textContent.trim()],
           ['Issue Date', document.getElementById('sheetIssueDate').textContent.trim()]
         ];
+
+        const logoImage = document.querySelector('.result-sheet-logo');
+        if (logoImage && logoImage.complete && logoImage.naturalWidth > 0) {
+          const logoCanvas = document.createElement('canvas');
+          logoCanvas.width = logoImage.naturalWidth;
+          logoCanvas.height = logoImage.naturalHeight;
+          const logoContext = logoCanvas.getContext('2d');
+          logoContext.drawImage(logoImage, 0, 0);
+          pdf.addImage(logoCanvas.toDataURL('image/png'), 'PNG', margin + 2, 8, 18, 18);
+        }
 
         pdf.setTextColor(20, 34, 58);
         pdf.setFont('helvetica', 'bold');
