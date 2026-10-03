@@ -1643,10 +1643,10 @@
         .replace(/'/g, '&#039;');
     }
 
-    const PBKDF2_ITERATIONS = 100000;
+    const PBKDF2_ITERATION_OPTIONS = [100000, 200000];
 
-    // Derive AES-GCM Key using Web Crypto PBKDF2 (SHA-256, 100,000 iterations) from student ID/RegNo
-    async function deriveDecryptionKey(normalizedId, saltBytes) {
+    // Derive AES-GCM keys using the iteration counts supported by published exports.
+    async function deriveDecryptionKey(normalizedId, saltBytes, iterations) {
       const passphrase = normalizedId;
       const enc = new TextEncoder();
       const keyMaterial = await crypto.subtle.importKey(
@@ -1661,7 +1661,7 @@
         {
           name: 'PBKDF2',
           salt: saltBytes,
-          iterations: PBKDF2_ITERATIONS,
+          iterations,
           hash: 'SHA-256'
         },
         keyMaterial,
@@ -1673,30 +1673,31 @@
 
     // Attempt to decrypt a single record
     async function tryDecryptRecord(record, normalizedId) {
-      try {
-        const saltBytes = base64ToUint8Array(record.salt);
-        const ivBytes = base64ToUint8Array(record.iv);
-        const cipherBytes = base64ToUint8Array(record.data);
+      const saltBytes = base64ToUint8Array(record.salt);
+      const ivBytes = base64ToUint8Array(record.iv);
+      const cipherBytes = base64ToUint8Array(record.data);
 
-        const key = await deriveDecryptionKey(normalizedId, saltBytes);
-        const decryptedBuffer = await crypto.subtle.decrypt(
-          { name: 'AES-GCM', iv: ivBytes },
-          key,
-          cipherBytes
-        );
+      for (const iterations of PBKDF2_ITERATION_OPTIONS) {
+        try {
+          const key = await deriveDecryptionKey(normalizedId, saltBytes, iterations);
+          const decryptedBuffer = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: ivBytes },
+            key,
+            cipherBytes
+          );
 
-        const jsonStr = new TextDecoder().decode(decryptedBuffer);
-        const student = JSON.parse(jsonStr);
+          const student = JSON.parse(new TextDecoder().decode(decryptedBuffer));
 
-        // Verify ID match (Unique ID or College Register Number)
-        const matchesUniqueId = student && student.uniqueId && String(student.uniqueId).trim().toUpperCase() === normalizedId;
-        const matchesRegNo = student && student.regNo && String(student.regNo).trim().toUpperCase() === normalizedId;
+          // Verify ID match (Unique ID or College Register Number)
+          const matchesUniqueId = student && student.uniqueId && String(student.uniqueId).trim().toUpperCase() === normalizedId;
+          const matchesRegNo = student && student.regNo && String(student.regNo).trim().toUpperCase() === normalizedId;
 
-        if (matchesUniqueId || matchesRegNo) {
-          return student;
+          if (matchesUniqueId || matchesRegNo) {
+            return student;
+          }
+        } catch (err) {
+          // A mismatch is expected when trying another lookup ID or iteration count.
         }
-      } catch (err) {
-        // Expected decryption failure on mismatch (AES-GCM authentication tag mismatch)
       }
       return null;
     }
